@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>おかいものメモ</title>
+<meta name="theme-color" content="#2f6b4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="おかいもの">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=M+PLUS+1p:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column, sticky header with home/store switch, big tap rows; store mode = high contrast, list only */
+:root{color-scheme:light;
+  --bg:#f3f5f1; --card:#ffffff; --fg:#1f2a24; --muted:#6b776f; --line:#dde3dc;
+  --home:#2f6b4f; --homeSoft:#e2efe7; --store:#c2410c; --storeSoft:#fbe7dc; --done:#a8b2ab;
+  --disp:"Zen Maru Gothic","Hiragino Maru Gothic ProN","M PLUS 1p",sans-serif;
+  --body:"M PLUS 1p","Hiragino Sans","Noto Sans JP",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141a17; --card:#1d2520; --fg:#e8eee9; --muted:#9aa69e; --line:#2c3630;
+  --home:#6fc39a; --homeSoft:#1f3329; --store:#ff8a52; --storeSoft:#3a2418; --done:#4c5650; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a17; --card:#1d2520; --fg:#e8eee9; --muted:#9aa69e; --line:#2c3630;
+  --home:#6fc39a; --homeSoft:#1f3329; --store:#ff8a52; --storeSoft:#3a2418; --done:#4c5650; color-scheme:dark}
+html,body{min-height:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:20px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 120px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-family:var(--disp);font-weight:900;font-size:1.8rem;margin:0;letter-spacing:.02em}
+.sync{font-size:.75rem;color:var(--muted)}
+.modes{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px}
+.modes button{font-family:var(--disp);font-weight:700;font-size:1.25rem;border:0;border-radius:999px;padding:12px 8px;background:transparent;color:var(--muted);cursor:pointer}
+.modes button[aria-pressed="true"].h{background:var(--home);color:#fff}
+.modes button[aria-pressed="true"].s{background:var(--store);color:#fff}
+button:focus-visible,input:focus-visible{outline:3px solid var(--home);outline-offset:2px}
+body.store button:focus-visible{outline-color:var(--store)}
+
+/* input */
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0;font:inherit;font-size:1.3rem;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--fg)}
+.add input:focus{border-color:var(--home);outline:none}
+.btn{font-family:var(--disp);font-weight:700;font-size:1.2rem;border:0;border-radius:14px;padding:0 18px;cursor:pointer;background:var(--home);color:#fff;white-space:nowrap}
+.mic{background:var(--homeSoft);color:var(--home);width:54px;padding:0;font-size:1.3rem}
+.mic.on{background:var(--home);color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.6}}
+.hint{font-size:1rem;color:var(--muted);margin:-8px 4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips .lbl{width:100%;font-size:.8rem;color:var(--muted);letter-spacing:.08em}
+.chip{font:inherit;font-size:1.15rem;border:1px dashed var(--home);color:var(--home);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer}
+
+/* list */
+.count{display:flex;align-items:baseline;gap:8px;font-family:var(--disp)}
+.count b{font-size:3.2rem;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+.count span{color:var(--muted);font-weight:700}
+body.store .count b{color:var(--store)}
+ul{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+li{display:flex;align-items:center;gap:14px;padding:4px 8px 4px 14px;border-top:1px solid var(--line);min-height:72px;transition:opacity .35s,background .35s}
+li:first-child{border-top:0}
+li label{flex:1;min-width:0;display:flex;align-items:center;gap:14px;cursor:pointer;padding-block:10px}
+li input{appearance:none;width:30px;height:30px;flex:none;border:2.5px solid var(--home);border-radius:8px;display:grid;place-items:center;cursor:pointer;background:var(--card)}
+body.store li input{border-color:var(--store);width:40px;height:40px}
+li input:checked{background:var(--store);border-color:var(--store)}
+body:not(.store) li input:checked{background:var(--home);border-color:var(--home)}
+li input:checked::after{content:"";width:9px;height:16px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-2px)}
+li .name{font-size:1.4rem;word-break:break-word}
+body.store li .name{font-size:1.6rem;font-weight:500}
+li.fresh{background:var(--homeSoft)}
+li.leaving{opacity:.35;background:var(--storeSoft)}
+li.leaving .name{text-decoration:line-through;color:var(--done)}
+.del{border:0;background:transparent;color:var(--muted);font-size:1.4rem;width:44px;height:44px;border-radius:10px;cursor:pointer}
+body.store .del{display:none}
+.empty{text-align:center;padding:36px 16px;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:18px}
+.empty strong{display:block;font-family:var(--disp);font-size:1.5rem;color:var(--fg);margin-bottom:6px}
+.dog{display:block;width:190px;max-width:60%;height:auto;margin:0 auto 10px}
+.dog .tail{transform-origin:150px 135px;animation:wag .5s ease-in-out infinite alternate}
+@keyframes wag{from{transform:rotate(-12deg)}to{transform:rotate(14deg)}}
+body.store .homeonly{display:none}
+body:not(.store) .storeonly{display:none}
+.banner{background:var(--storeSoft);color:var(--fg);border-radius:14px;padding:12px 16px;font-size:1.05rem}
+.trash{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
+.trash summary{cursor:pointer;padding:10px 0;font-size:1rem;color:var(--muted);font-weight:500}
+.trash ul{border:0;border-radius:0;background:transparent}
+.trash li{min-height:52px;padding:4px 0}
+.trash li .name{font-size:1.1rem;color:var(--muted)}
+.trash .when{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.trash .back{font-family:var(--disp);font-weight:700;font-size:1rem;border:1.5px solid var(--home);color:var(--home);background:transparent;border-radius:10px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.warn{background:var(--storeSoft);border:1.5px solid var(--store);border-radius:14px;padding:12px 16px;font-size:1rem;line-height:1.6}
+.warn b{display:block;font-family:var(--disp);font-size:1.1rem;color:var(--store);margin-bottom:2px}
+.foot{font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.foot button{font:inherit;font-size:.8rem;background:none;border:0;color:var(--home);text-decoration:underline;cursor:pointer;padding:0;align-self:flex-start}
+
+.toast{background:var(--fg);color:var(--bg);border-radius:16px;padding:10px 10px 10px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:1.1rem}
+.undos{display:flex;flex-direction:column;gap:6px;margin-top:-6px}
+.toast span{min-width:0}
+.toast button{font-family:var(--disp);font-size:1.2rem;font-weight:700;background:var(--bg);color:var(--fg);border:0;border-radius:12px;padding:10px 18px;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1>おかいものメモ</h1>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.0</span>
+    </div>
+    <div class="modes" role="group" aria-label="モード切り替え">
+      <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
+      <button class="s" id="mStore" aria-pressed="false">🛒 お店で買う</button>
+    </div>
+  </header>
+
+  <section class="homeonly" style="display:flex;flex-direction:column;gap:14px">
+    <form class="add" id="addForm" autocomplete="off">
+      <button type="button" class="btn mic" id="mic" aria-label="声で入力">🎤</button>
+      <input id="newItem" placeholder="例：牛乳と卵とパン" aria-label="買うもの">
+      <button class="btn" type="button" id="addBtn">追加</button>
+    </form>
+    <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。間違えたら「取り消し」と言うと直前のものが消えます。</p>
+  </section>
+
+  <div class="banner storeonly">チェックした品物は「買った」として少しあとで消えます。押し間違えたら、残り品数のすぐ下に出る「元に戻す」で戻せます。</div>
+
+  <div class="count" id="count"><b>0</b><span>品</span></div>
+  <div class="undos" id="undoBox" hidden></div>
+  <div id="listBox"></div>
+  <div class="chips homeonly" id="chips"></div>
+  <details class="trash homeonly" id="trash" hidden><summary id="trashSum">最近消したもの</summary><ul id="trashList"></ul></details>
+
+  <div class="foot homeonly">
+    <span id="geoNote"></span>
+    <button type="button" id="geoBtn" hidden>今いる場所を「自宅」として登録</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const LS="okaimono-v1";
+  // 茶色のミニチュアダックスフンド（しっぽを振る）
+  const DOG="<svg class=\"dog\" viewBox=\"0 0 200 175\" role=\"img\" aria-label=\"にっこり笑ってしっぽを振る茶色のミニチュアダックスフンド\"><path class=\"tail\" d=\"M150 135 q28 -6 26 -38\" stroke=\"#a0612f\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/><ellipse cx=\"132\" cy=\"138\" rx=\"30\" ry=\"24\" fill=\"#a0612f\"/><ellipse cx=\"100\" cy=\"128\" rx=\"40\" ry=\"34\" fill=\"#a0612f\"/><ellipse cx=\"96\" cy=\"132\" rx=\"20\" ry=\"24\" fill=\"#c88a52\"/><ellipse cx=\"84\" cy=\"160\" rx=\"11\" ry=\"7\" fill=\"#8a5126\"/><ellipse cx=\"108\" cy=\"161\" rx=\"11\" ry=\"7\" fill=\"#8a5126\"/><ellipse cx=\"146\" cy=\"160\" rx=\"13\" ry=\"7\" fill=\"#8a5126\"/><ellipse cx=\"96\" cy=\"72\" rx=\"44\" ry=\"40\" fill=\"#a0612f\"/><ellipse cx=\"56\" cy=\"88\" rx=\"14\" ry=\"29\" transform=\"rotate(14 56 88)\" fill=\"#6e3b1a\"/><ellipse cx=\"136\" cy=\"88\" rx=\"14\" ry=\"29\" transform=\"rotate(-14 136 88)\" fill=\"#6e3b1a\"/><ellipse cx=\"96\" cy=\"91\" rx=\"22\" ry=\"16\" fill=\"#c88a52\"/><circle cx=\"79\" cy=\"54\" r=\"3.5\" fill=\"#c88a52\"/><circle cx=\"113\" cy=\"54\" r=\"3.5\" fill=\"#c88a52\"/><circle cx=\"79\" cy=\"67\" r=\"7.5\" fill=\"#2b1a12\"/><circle cx=\"113\" cy=\"67\" r=\"7.5\" fill=\"#2b1a12\"/><circle cx=\"81.5\" cy=\"64\" r=\"3\" fill=\"#fff\"/><circle cx=\"115.5\" cy=\"64\" r=\"3\" fill=\"#fff\"/><circle cx=\"76.5\" cy=\"70\" r=\"1.3\" fill=\"#fff\"/><circle cx=\"110.5\" cy=\"70\" r=\"1.3\" fill=\"#fff\"/><ellipse cx=\"67\" cy=\"82\" rx=\"8\" ry=\"5\" fill=\"#f2a0a8\" opacity=\".75\"/><ellipse cx=\"125\" cy=\"82\" rx=\"8\" ry=\"5\" fill=\"#f2a0a8\" opacity=\".75\"/><ellipse cx=\"96\" cy=\"81\" rx=\"7.5\" ry=\"5.5\" fill=\"#2b1a12\"/><path d=\"M84 90 q12 18 24 0 Z\" fill=\"#2b1a12\"/><ellipse cx=\"96\" cy=\"99\" rx=\"6\" ry=\"4.5\" fill=\"#ee7d8a\"/></svg>";
+  const COMMON=["牛乳","卵","食パン","納豆","豆腐","バナナ","トイレットペーパー","ティッシュ"];
+  // items: リストの品物（t=最後に追加・復活した時刻）
+  // gone : 消した品物の記録 {id:{n:品名,t:消した時刻}}。端末どうしで突き合わせ、勝手に消えたり復活したりしないようにする
+  let state={items:[],gone:{},history:[],rev:0};
+  let docRef=null, inFlight=false, dirty=false, retryTimer=null;
+  let mode="home", removed=[], undoTimer=null;   // removed: 最新が先頭、最大5件
+  const $=id=>document.getElementById(id);
+
+  function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+  let lsOk=true;
+  function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){lsOk=false}}
+  try{ localStorage.setItem(LS+"-probe","1"); if(localStorage.getItem(LS+"-probe")!=="1") lsOk=false; }catch(e){ lsOk=false; }
+  function norm(x){
+    const o={items:[],gone:{},history:[],rev:0};
+    if(!x||typeof x!=="object") return o;
+    if(Array.isArray(x.items)) x.items.forEach(i=>{ if(i&&i.id&&i.name) o.items.push({id:String(i.id),name:String(i.name),t:+i.t||1}); });
+    if(x.gone&&typeof x.gone==="object") Object.keys(x.gone).forEach(k=>{ const g=x.gone[k]; if(g) o.gone[k]={n:String(g.n||""),t:+g.t||1}; });
+    if(Array.isArray(x.history)) o.history=x.history.filter(h=>typeof h==="string").slice(0,24);
+    o.rev=+x.rev||0;
+    return o;
+  }
+  // 2つの状態を合わせる。追加も削除も「新しい操作」を優先し、どちらの端末の操作も失わない
+  const KEEP_GONE=14*24*3600e3;
+  function merge(a,b){
+    const items={}, gone={};
+    [a,b].forEach(s=>{
+      s.items.forEach(i=>{ if(!items[i.id]||i.t>items[i.id].t) items[i.id]={id:i.id,name:i.name,t:i.t}; });
+      Object.keys(s.gone).forEach(k=>{ const g=s.gone[k]; if(!gone[k]||g.t>gone[k].t) gone[k]={n:g.n,t:g.t}; });
+    });
+    const out={items:[],gone:{},history:[],rev:Math.max(a.rev,b.rev)};
+    Object.values(items).forEach(i=>{ if(!gone[i.id]||i.t>gone[i.id].t) out.items.push(i); });
+    const cut=Date.now()-KEEP_GONE;
+    Object.keys(gone).forEach(k=>{ const g=gone[k]; if((!items[k]||g.t>=items[k].t)&&g.t>cut) out.gone[k]=g; });
+    // 同じ品名が2つになったら、先に入れた方を残す
+    const seen=new Set();
+    out.items.sort((x,y)=>x.t-y.t||(x.id<y.id?-1:1));
+    out.items=out.items.filter(i=>{ if(seen.has(i.name)) return false; seen.add(i.name); return true; });
+    const newer=a.rev>=b.rev?a:b, older=newer===a?b:a;
+    out.history=[...newer.history,...older.history].filter((v,i,arr)=>arr.indexOf(v)===i).slice(0,24);
+    return out;
+  }
+  function sig(s){ return JSON.stringify([s.items.map(i=>i.id+":"+i.t),Object.keys(s.gone).sort().map(k=>k+":"+s.gone[k].t)]); }
+  state=norm(lsGet(LS));
+
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+  // 変更したら必ずここを通す。rev（更新時刻）を進め、端末に保存してから共有先へ送る
+  function save(){
+    state.rev=Math.max(Date.now(),(state.rev||0)+1);
+    lsSet(LS,state);
+  }
+  function setSync(t){$("sync").textContent=t}
+  // 共有先への書き込みは常に「最新の状態を1件だけ」。詰まっても後続を止めず、時間切れで再試行する
+  async function flush(){
+    if(!docRef||inFlight||!dirty) return;
+    inFlight=true; dirty=false;
+    const snap=JSON.parse(JSON.stringify(state));
+    let ok=false;
+    try{
+      await Promise.race([docRef.set(snap),new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),10000))]);
+      ok=true; setSync("自分用に保存済み");
+    }catch(e){
+      dirty=true; setSync("控えの保存を再試行中（このスマホには保存済み）");
+    }finally{
+      inFlight=false;
+      if(dirty){ if(ok) flush(); else { clearTimeout(retryTimer); retryTimer=setTimeout(flush,5000); } }
+    }
+  }
+
+  // 「と」で区切る（古いiPhoneでも動く書き方。先頭・末尾の「と」は品名の一部として残す）
+  function splitTo(p){
+    const a=p.split("と"), out=[]; let buf="";
+    for(let i=0;i<a.length;i++){
+      buf+=a[i];
+      if(i<a.length-1){
+        if(buf===""||a[i+1]==="") buf+="と";
+        else { out.push(buf); buf=""; }
+      }
+    }
+    if(buf) out.push(buf);
+    return out;
+  }
+  function splitWords(t){
+    const parts=String(t).replace(/[。．.]/g,"、").split(/[、,，\s　]+|それから/);
+    const out=[];
+    parts.forEach(p=>{ p=p.trim(); if(p) splitTo(p).forEach(w=>{ w=w.trim(); if(w) out.push(w); }); });
+    return out;
+  }
+  // 「取り消し」などと言うと、直前に入れたものを消す
+  const CANCEL=/^(取り?消し?て?|取り?消し?です|とりけして?|トリケシ|キャンセル|やっぱりいらない|今のなし|いまのなし)$/;
+  let addLog=[], freshIds=new Set(), freshTimer=null;   // 入力ごとに追加した品物の記録（新しいものが末尾）
+  let noteTimer=null;
+  function note(msg){
+    const h=$("hint"); h.textContent=msg; h.style.color="var(--fg)";
+    clearTimeout(noteTimer); noteTimer=setTimeout(()=>{h.style.color="";h.textContent="「牛乳と卵とパン」のように続けて言えば、まとめて追加されます。間違えたら「取り消し」と言うと直前のものが消えます。"},6000);
+  }
+  function cancelLast(cur){
+    // 同じ発言の中に直前の品があればその1品、なければひとつ前の入力を丸ごと消す
+    let batch;
+    if(cur.length) batch=[cur.pop()];
+    else batch=addLog.pop();
+    if(!batch||!batch.length){ note("取り消せるものがありません"); return [] }
+    const names=[];
+    batch.forEach(b=>{
+      const i=state.items.findIndex(x=>x.id===b.id);
+      if(i>=0){ names.push(state.items[i].name); state.gone[b.id]={n:"",t:Date.now()}; state.items.splice(i,1); }
+      if(b.newHistory) state.history=state.history.filter(h=>h!==b.name);
+    });
+    return names;
+  }
+  function addText(t){
+    const words=splitWords(t); if(!words.length) return;
+    if(!Array.isArray(state.items)) state.items=[];
+    if(!Array.isArray(state.history)) state.history=[];
+    const have=new Set(state.items.map(i=>i.name));
+    const cur=[]; let cancelled=[];
+    // 「ビール取り消し」のように区切りなしで続いた場合も、品名と取り消しに分ける
+    const seq=[];
+    words.forEach(w=>{
+      const m=w.match(/^(.+?)(取り?消し?て?|取り?消し?です|とりけして?|トリケシ|キャンセル)$/);
+      if(m&&!CANCEL.test(w)) seq.push(m[1],"取り消し"); else seq.push(w);
+    });
+    seq.forEach(w=>{
+      if(CANCEL.test(w)){ cancelled=cancelled.concat(cancelLast(cur)); return; }
+      if(!have.has(w)){
+        const id=uid(); state.items.push({id,name:w,t:Date.now()+cur.length}); have.add(w);   // 言った順に並ぶよう少しずらす
+        cur.push({id,name:w,newHistory:!state.history.includes(w)});
+      }
+      state.history=[w,...state.history.filter(h=>h!==w)].slice(0,24);
+    });
+    if(cur.length){ addLog.push(cur); addLog=addLog.slice(-10); }
+    const addedNames=cur.map(c=>c.name);
+    const msgs=[];
+    if(addedNames.length) msgs.push("「"+addedNames.join("」「")+"」を追加しました");
+    if(cancelled.length) msgs.push("「"+cancelled.join("」「")+"」を取り消しました");
+    if(!msgs.length) msgs.push("すでにリストにあります");
+    note(msgs.join("。"));
+    freshIds=new Set(cur.map(c=>c.id));
+    clearTimeout(freshTimer); freshTimer=setTimeout(()=>{freshIds=new Set();document.querySelectorAll("li.fresh").forEach(l=>l.classList.remove("fresh"))},3000);
+    save(); render();
+    // 追加した品物が見える位置まで動かす
+    try{
+      const fr=document.querySelectorAll("li.fresh"), last=fr[fr.length-1];
+      if(last&&last.scrollIntoView) last.scrollIntoView({block:"nearest",behavior:"smooth"});
+    }catch(e){}
+  }
+
+  function render(){
+    document.body.classList.toggle("store",mode==="store");
+    $("mHome").setAttribute("aria-pressed",mode==="home");
+    $("mStore").setAttribute("aria-pressed",mode==="store");
+    const n=state.items.length;
+    $("count").innerHTML=`<b>${n}</b><span>${mode==="store"?"品 のこり":"品 次回買うもの"}</span>`;
+    const box=$("listBox"); box.textContent="";
+    if(!n){
+      const e=document.createElement("div"); e.className="empty";
+      e.innerHTML=mode==="store"
+        ?DOG+"<strong>ぜんぶ買えました</strong>良かったね！おつかれさま！"
+        :"<strong>まだ何もありません</strong>上の欄に書くか、🎤で話すか、下の「よく買うもの」をタップして追加します。";
+      box.appendChild(e);
+    }else{
+      const ul=document.createElement("ul");
+      state.items.forEach(it=>{
+        const li=document.createElement("li"); li.dataset.id=it.id;
+        if(freshIds.has(it.id)) li.classList.add("fresh");
+        const lab=document.createElement("label");
+        const cb=document.createElement("input"); cb.type="checkbox"; cb.id="c-"+it.id;
+        cb.setAttribute("aria-label",it.name+" を買った");
+        const sp=document.createElement("span"); sp.className="name"; sp.textContent=it.name;
+        lab.append(cb,sp);
+        const del=document.createElement("button"); del.className="del"; del.type="button"; del.textContent="×";
+        del.setAttribute("aria-label",it.name+" を消す");
+        del.onclick=()=>removeItem(it.id,"消しました");
+        cb.onchange=()=>{ if(cb.checked){li.classList.add("leaving");setTimeout(()=>{if(cb.checked)removeItem(it.id,"「"+it.name+"」を買いました")},1200)} };
+        li.append(lab,del); ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    }
+    // chips
+    const chips=$("chips"); chips.textContent="";
+    const inList=new Set(state.items.map(i=>i.name));
+    const cands=[...state.history,...COMMON].filter((v,i,a)=>a.indexOf(v)===i&&!inList.has(v)).slice(0,12);
+    if(cands.length){
+      const l=document.createElement("span"); l.className="lbl"; l.textContent="よく買うもの（タップで追加）"; chips.appendChild(l);
+      cands.forEach(c=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent="＋ "+c;b.onclick=()=>addText(c);chips.appendChild(b)});
+    }
+    renderTrash();
+  }
+  // 最近消したもの（14日分）。いつでも戻せる
+  function renderTrash(){
+    const list=$("trashList"); list.textContent="";
+    const inList=new Set(state.items.map(i=>i.name));
+    const g=Object.keys(state.gone).map(k=>({id:k,n:state.gone[k].n,t:state.gone[k].t}))
+      .filter(x=>x.n&&!inList.has(x.n)).sort((a,b)=>b.t-a.t)
+      .filter((x,i,a)=>a.findIndex(y=>y.n===x.n)===i).slice(0,20);
+    $("trash").hidden=!g.length;
+    $("trashSum").textContent="最近消したもの（"+g.length+"）";
+    g.forEach(x=>{
+      const li=document.createElement("li");
+      const sp=document.createElement("span"); sp.className="name"; sp.textContent=x.n; sp.style.flex="1";
+      const w=document.createElement("span"); w.className="when"; w.textContent=ago(x.t);
+      const b=document.createElement("button"); b.type="button"; b.className="back"; b.textContent="戻す";
+      b.onclick=()=>{ restore(x.id,x.n,null); note("「"+x.n+"」をリストに戻しました"); };
+      li.append(sp,w,b); list.appendChild(li);
+    });
+  }
+  function ago(t){
+    const d=new Date(t), now=new Date();
+    const hm=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
+    if(d.toDateString()===now.toDateString()) return "今日 "+hm;
+    const y=new Date(now); y.setDate(now.getDate()-1);
+    if(d.toDateString()===y.toDateString()) return "昨日 "+hm;
+    return (d.getMonth()+1)+"/"+d.getDate()+" "+hm;
+  }
+
+  function removeItem(id,msg){
+    const idx=state.items.findIndex(i=>i.id===id); if(idx<0) return;
+    removed=[{item:state.items[idx],idx,msg},...removed].slice(0,5);
+    state.gone[id]={n:state.items[idx].name,t:Date.now()};
+    state.items.splice(idx,1); save(); render();
+    renderUndos();
+    // 最後に消してから10秒たったら、まとめて片付ける
+    clearTimeout(undoTimer); undoTimer=setTimeout(()=>{removed=[];renderUndos()},10000);
+  }
+  function restore(id,name,idx){
+    delete state.gone[id];
+    if(!state.items.some(i=>i.id===id||i.name===name)){
+      const it={id,name,t:Date.now()};
+      if(idx==null) state.items.push(it); else state.items.splice(Math.min(idx,state.items.length),0,it);
+    }
+    save(); render();
+  }
+  function renderUndos(){
+    const box=$("undoBox"); box.textContent="";
+    box.hidden=!removed.length;
+    removed.forEach(r=>{
+      const row=document.createElement("div"); row.className="toast";
+      const sp=document.createElement("span"); sp.textContent=r.msg;
+      const b=document.createElement("button"); b.type="button"; b.textContent="元に戻す";
+      b.onclick=()=>{
+        removed=removed.filter(x=>x!==r);
+        restore(r.item.id,r.item.name,r.idx);
+        renderUndos();
+      };
+      row.append(sp,b); box.appendChild(row);
+    });
+  }
+
+  // 音声入力や日本語変換の文字が確定してから読み取るため、いったん入力欄を閉じて少し待つ
+  // フォーム送信はこの画面では動かないため、ボタンとEnterキーを直接受け取る
+  let adding=false;
+  function doAdd(){
+    if(adding) return; adding=true;
+    const inp=$("newItem");
+    inp.blur();
+    let tries=0;
+    const go=()=>{
+      const v=inp.value.trim();
+      if(!v){
+        if(++tries<4){ setTimeout(go,250); return; }
+        adding=false;
+        note("入力欄が空でした。話した言葉が入力欄に表示されてから「追加」を押してください");
+        return;
+      }
+      inp.value=""; adding=false;
+      try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
+    };
+    setTimeout(go,150);
+  }
+  $("addBtn").addEventListener("click",doAdd);
+  $("newItem").addEventListener("keydown",e=>{
+    if(e.key==="Enter"&&!e.isComposing&&e.keyCode!==229){ e.preventDefault(); doAdd(); }
+  });
+  $("addForm").addEventListener("submit",e=>{ e.preventDefault(); doAdd(); });
+  $("mHome").onclick=()=>{mode="home";lsSet(LS+"-mode","home");render()};
+  $("mStore").onclick=()=>{mode="store";lsSet(LS+"-mode","store");render()};
+
+  // 音声入力（使えない環境ではキーボードのマイクへ案内）
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  $("mic").onclick=()=>{
+    if(!SR){micFallback();return}
+    try{
+      const r=new SR(); r.lang="ja-JP"; r.interimResults=false;
+      let got=false, done=false;
+      const fail=()=>{ if(done) return; done=true; try{r.abort()}catch(e){} micFallback(); };
+      $("mic").classList.add("on");
+      note("聞いています…品物を話してください");
+      r.onresult=ev=>{ got=true; done=true; const t=ev.results[0][0].transcript; addText(t); };
+      r.onerror=fail;
+      r.onend=()=>{ $("mic").classList.remove("on"); if(!got) fail(); };
+      setTimeout(()=>{ if(!got) fail(); },8000);   // 何も起きないままならキーボードのマイクへ案内
+      r.start();
+    }catch(e){micFallback()}
+  };
+  function micFallback(){
+    $("mic").classList.remove("on");
+    clearTimeout(noteTimer);
+    const h=$("hint"); h.style.color="var(--store)";
+    h.textContent="この画面の🎤は使えませんでした。入力欄をタップし、キーボードのマイクボタンで話してから「追加」を押してください。";
+    $("newItem").focus();
+  }
+
+  // 位置で自動切り替え（使える環境のみ）
+  const HOME=LS+"-home";
+  function dist(a,b){const R=6371e3,t=Math.PI/180,dl=(b.lat-a.lat)*t,dn=(b.lng-a.lng)*t;
+    const x=Math.sin(dl/2)**2+Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+  function geo(cb){ if(!navigator.geolocation) return; try{navigator.geolocation.getCurrentPosition(p=>cb({lat:p.coords.latitude,lng:p.coords.longitude}),()=>{}, {timeout:8000,maximumAge:60000})}catch(e){} }
+  geo(pos=>{
+    $("geoBtn").hidden=false;
+    const home=lsGet(HOME);
+    if(home){ mode=dist(home,pos)<150?"home":"store"; $("geoNote").textContent="現在地から自動で切り替えました"; render(); }
+    $("geoBtn").onclick=()=>{lsSet(HOME,pos);$("geoNote").textContent="自宅の場所を登録しました";};
+  });
+  const m=lsGet(LS+"-mode"); if(m==="store") mode="store";
+  render();
+
+  // 保存：まずこのスマホの中に保存。サインインしていれば、その人だけの保存場所にも控えを置く（他の人とは共有しない）
+  // このスマホの中に、できるだけ消されないように保存してもらう
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  if(!lsOk) setSync("保存できない設定です");
+  // オフラインでも開けるようにする（お店で電波が弱いとき用）
+  if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
+})();
+</script>
+</body>
+</html>

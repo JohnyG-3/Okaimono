@@ -57,6 +57,9 @@ body.store button:focus-visible{outline-color:var(--store)}
 .mic.on{background:var(--home);color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.6}}
 .hint{font-size:1rem;color:var(--muted);margin:-8px 4px 0}
+.auto{display:flex;align-items:center;gap:10px;font-size:1rem;margin:-6px 4px 0;cursor:pointer}
+.auto input{width:24px;height:24px;accent-color:var(--home);flex:none}
+.add input.waiting{border-color:var(--home);background:var(--homeSoft)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips .lbl{width:100%;font-size:.8rem;color:var(--muted);letter-spacing:.08em}
 .chip{font:inherit;font-size:1.15rem;border:1px dashed var(--home);color:var(--home);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer}
@@ -114,7 +117,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.0</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.3</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -128,6 +131,7 @@ body:not(.store) .storeonly{display:none}
       <input id="newItem" placeholder="例：牛乳と卵とパン" aria-label="買うもの">
       <button class="btn" type="button" id="addBtn">追加</button>
     </form>
+    <label class="auto" for="autoAdd"><input type="checkbox" id="autoAdd" checked>話し終わったら自動で追加する</label>
     <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。間違えたら「取り消し」と言うと直前のものが消えます。</p>
   </section>
 
@@ -418,7 +422,30 @@ body:not(.store) .storeonly{display:none}
     };
     setTimeout(go,150);
   }
-  $("addBtn").addEventListener("click",doAdd);
+  $("addBtn").addEventListener("click",()=>{ clearTimeout(autoTimer); $("newItem").classList.remove("waiting"); doAdd(); });
+
+  // キーボードのマイクで話した言葉が入力欄に入り、0.8秒ほど変化がなければ自動で追加する
+  let autoTimer=null, composingNow=false;
+  const AUTO_MS=800;
+  const autoBox=$("autoAdd");
+  const savedAuto=lsGet(LS+"-auto"); if(savedAuto===false) autoBox.checked=false;
+  autoBox.onchange=()=>lsSet(LS+"-auto",autoBox.checked);
+  function addKeepFocus(){
+    const inp=$("newItem"); inp.classList.remove("waiting");
+    const v=inp.value.trim(); if(!v||composingNow) return;
+    inp.value="";
+    try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
+  }
+  $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; clearTimeout(autoTimer); });
+  $("newItem").addEventListener("compositionend",()=>{ composingNow=false; schedule(); });
+  $("newItem").addEventListener("input",e=>{ if(e.isComposing) { composingNow=true; return; } schedule(); });
+  function schedule(){
+    clearTimeout(autoTimer);
+    const inp=$("newItem");
+    if(!autoBox.checked||!inp.value.trim()){ inp.classList.remove("waiting"); return; }
+    inp.classList.add("waiting");
+    autoTimer=setTimeout(addKeepFocus,AUTO_MS);
+  }
   $("newItem").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&!e.isComposing&&e.keyCode!==229){ e.preventDefault(); doAdd(); }
   });

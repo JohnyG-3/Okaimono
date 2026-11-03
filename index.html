@@ -124,7 +124,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.8</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.9</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -483,14 +483,15 @@ body:not(.store) .storeonly{display:none}
     inp.blur();
     let tries=0;
     const go=()=>{
-      const v=inp.value.trim();
+      const raw=inp.value, v=takeNew(raw);
       if(!v){
-        if(++tries<4){ setTimeout(go,250); return; }
+        if(++tries<4&&!raw.trim()){ setTimeout(go,250); return; }
+        if(raw.trim()){ inp.value=""; done=""; adding=false; return; }   // 新しい分がない（もう追加済み）
         adding=false;
         note("入力欄が空でした。話した言葉が入力欄に表示されてから「追加」を押してください");
         return;
       }
-      inp.value=""; adding=false;
+      inp.value=""; done=""; adding=false;
       try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
     };
     setTimeout(go,150);
@@ -505,23 +506,32 @@ body:not(.store) .storeonly{display:none}
   autoBox.onchange=()=>lsSet(LS+"-auto",autoBox.checked);
   // iPhoneの音声入力は話している間「変換途中」のままなので、それを待たずに追加する。
   // 追加済みの文字をiPhoneがもう一度入れ直してきても、二重に追加しないよう覚えておく
-  let consumed="", consumedAt=0, compEndAt=0, compSince=false;
+  // iPhoneの音声入力は、話している間の文字を「変換途中」として預かっている。
+  // その間に入力欄を空にすると、iPhoneとずれて文字が出なくなるので、変換途中は入力欄にさわらない。
+  // 代わりに「どこまで読んだか（done）」を覚え、新しく増えた部分だけを追加する。
+  let done="";
+  function lcp(a,b){ let i=0; while(i<a.length&&i<b.length&&a[i]===b[i]) i++; return i; }
+  function takeNew(raw){
+    // 前に読んだ部分のうしろに増えた文字だけを返す（iPhoneが前の部分を直した場合も、そろっている所から先）
+    const n=lcp(raw,done);
+    return raw.slice(n).replace(/^[、,，。．.\s　]+/,"").trim();
+  }
   function addKeepFocus(){
     const inp=$("newItem"); inp.classList.remove("waiting");
-    const raw=inp.value; let v=raw.trim(); if(!v) return;
-    // 同じ音声入力の続き（変換途中のまま、または終わった直後）のときだけ、追加済みの部分を外す
-    const recent=Date.now()-consumedAt<10000;
-    const sameDictation=composingNow||compSince||Date.now()-compEndAt<3000;
-    if(recent&&sameDictation&&consumed&&v.startsWith(consumed)) v=v.slice(consumed.length).trim();
-    consumed=(composingNow||Date.now()-compEndAt<3000)?raw.trim():""; consumedAt=Date.now(); compSince=false;
-    try{ inp.value=""; }catch(e){}
+    const raw=inp.value;
+    const v=takeNew(raw);
+    if(composingNow){
+      done=raw;                    // 変換途中：入力欄はそのまま。読んだ位置だけ進める
+    }else{
+      done=""; try{ inp.value=""; }catch(e){}   // 変換が終わっている：空にして次に備える
+    }
     if(!v) return;
     try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
   }
-  $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; compSince=true; schedule(); });
+  $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; schedule(); });
   $("newItem").addEventListener("compositionupdate",()=>schedule());
-  $("newItem").addEventListener("compositionend",()=>{ composingNow=false; compEndAt=Date.now(); schedule(); });
-  $("newItem").addEventListener("input",()=>schedule());
+  $("newItem").addEventListener("compositionend",()=>{ composingNow=false; schedule(); });
+  $("newItem").addEventListener("input",()=>{ if(!$("newItem").value) done=""; schedule(); });
   function schedule(){
     clearTimeout(autoTimer);
     const inp=$("newItem");

@@ -124,7 +124,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.7</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.8</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -276,15 +276,18 @@ body:not(.store) .storeonly{display:none}
   const KNUM={"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,
     "いっ":1,"いち":1,"ひと":1,"に":2,"ふた":2,"さん":3,"みっ":3,"よん":4,"よ":4,"よっ":4,"ご":5,"いつ":5};
   // 数字を半角にそろえ、「2 個」のように間に空白が入っても「2個」につなげる（iPhoneの音声入力対策）
+  // 数を表す字：iPhoneは「2個」を「2箇」「2ヶ」などと書くことがあるので、まとめて受け付ける
+  const CNT="個|箇|ヶ|ケ|ヵ|カ|こ|コ|つ";
+  const CNT_KANJI="個|箇|コ|ヶ|ケ";
   function normNums(t){
     return String(t)
       .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
-      .replace(/([0-9一二三四五六七八九十])[\s　]+(個|こ|コ|つ)/g,"$1$2");
+      .replace(new RegExp("([0-9一二三四五六七八九十])[\\s　]+("+CNT+")","g"),"$1$2");
   }
   function parseQty(w){
     w=normNums(w).replace(/[。、．.!！?？]+$/,"").trim();
-    let m=w.match(/^(.*?)[\s　]*([0-9]+|[一二三四五六七八九十])(個|こ|コ|つ)$/)   // 2個・二個・2こ・2つ
-       || w.match(/^(.*?)(いっ|いち|に|さん|よん|ご)(個|コ)$/)                      // にこ→「に個」などの聞き取り
+    let m=w.match(new RegExp("^(.*?)[\\s　]*([0-9]+|[一二三四五六七八九十])("+CNT+")$"))   // 2個・2箇・二個・2ヶ・2こ・2つ
+       || w.match(new RegExp("^(.*?)(いっ|いち|に|さん|よん|ご)("+CNT_KANJI+")$"))        // にこ→「に個」などの聞き取り
        || w.match(/^(.*?)(ひと|ふた|みっ|よっ|いつ)(つ)$/);                           // ふたつ・みっつ
     if(!m) return null;
     const n=KNUM[m[2]]||parseInt(m[2],10);
@@ -310,7 +313,7 @@ body:not(.store) .storeonly{display:none}
     seq.forEach(w=>{
       if(CANCEL.test(w)){ cancelled=cancelled.concat(cancelLast(cur)); return; }
       let pq=parseQty(w);
-      if(!pq&&/^(個|コ|こ|つ)$/.test(w)){
+      if(!pq&&new RegExp("^("+CNT+")$").test(w)){
         // 「納豆2」のあとに「個」だけが届いた → 直前の品物の名前から数字を外して数量にする
         const lastAdd=[...cur].reverse().find(c=>!c.qtyOnly)||((addLog[addLog.length-1]||[]).filter(c=>!c.qtyOnly).slice(-1)[0]);
         const it=lastAdd&&state.items.find(i=>i.id===lastAdd.id);

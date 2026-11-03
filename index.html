@@ -76,6 +76,10 @@ li:first-child{border-top:0}
 li label{flex:1;min-width:0;display:flex;align-items:center;gap:14px;cursor:pointer;padding-block:10px}
 li input{appearance:none;width:30px;height:30px;flex:none;border:2.5px solid var(--home);border-radius:8px;display:grid;place-items:center;cursor:pointer;background:var(--card)}
 body.store li input{border-color:var(--store);width:40px;height:40px}
+body:not(.store) li input{display:none}
+body:not(.store) li label{cursor:default}
+.qty{display:inline-block;margin-left:6px;color:var(--home);font-weight:700;font-size:1.15em;line-height:1;vertical-align:-0.05em}
+body.store .qty{color:var(--store)}
 li input:checked{background:var(--store);border-color:var(--store)}
 body:not(.store) li input:checked{background:var(--home);border-color:var(--home)}
 li input:checked::after{content:"";width:9px;height:16px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-2px)}
@@ -91,6 +95,7 @@ body.store .del{display:none}
 .dog{display:block;width:190px;max-width:60%;height:auto;margin:0 auto 10px}
 .dog .tail{transform-origin:150px 135px;animation:wag .5s ease-in-out infinite alternate}
 @keyframes wag{from{transform:rotate(-12deg)}to{transform:rotate(14deg)}}
+.inputs{display:flex;flex-direction:column;gap:14px}
 body.store .homeonly{display:none}
 body:not(.store) .storeonly{display:none}
 .banner{background:var(--storeSoft);color:var(--fg);border-radius:14px;padding:12px 16px;font-size:1.05rem}
@@ -118,7 +123,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.4</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.5</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -126,14 +131,14 @@ body:not(.store) .storeonly{display:none}
     </div>
   </header>
 
-  <section class="homeonly" style="display:flex;flex-direction:column;gap:14px">
+  <section class="homeonly inputs">
     <form class="add" id="addForm" autocomplete="off">
       <button type="button" class="btn mic" id="mic" aria-label="声で入力">🎤</button>
       <input id="newItem" placeholder="例：牛乳と卵とパン" aria-label="買うもの">
       <button class="btn" type="button" id="addBtn">追加</button>
     </form>
     <label class="auto" for="autoAdd"><input type="checkbox" id="autoAdd" checked>話し終わったら自動で追加する</label>
-    <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。間違えたら「取り消し」と言うと直前のものが消えます。</p>
+    <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。数は「牛乳2個」のように言えば②と付きます（5個まで）。間違えたら「取り消し」と言うと直前のものが消えます。</p>
   </section>
 
   <div class="banner storeonly">チェックした品物は「買った」として少しあとで消えます。押し間違えたら、残り品数のすぐ下に出る「元に戻す」で戻せます。</div>
@@ -170,7 +175,7 @@ body:not(.store) .storeonly{display:none}
   function norm(x){
     const o={items:[],gone:{},history:[],rev:0};
     if(!x||typeof x!=="object") return o;
-    if(Array.isArray(x.items)) x.items.forEach(i=>{ if(i&&i.id&&i.name) o.items.push({id:String(i.id),name:String(i.name),t:+i.t||1}); });
+    if(Array.isArray(x.items)) x.items.forEach(i=>{ if(i&&i.id&&i.name) o.items.push({id:String(i.id),name:String(i.name),t:+i.t||1,q:Math.max(0,Math.min(5,+i.q||0))}); });
     if(x.gone&&typeof x.gone==="object") Object.keys(x.gone).forEach(k=>{ const g=x.gone[k]; if(g) o.gone[k]={n:String(g.n||""),t:+g.t||1}; });
     if(Array.isArray(x.history)) o.history=x.history.filter(h=>typeof h==="string").slice(0,24);
     o.rev=+x.rev||0;
@@ -181,7 +186,7 @@ body:not(.store) .storeonly{display:none}
   function merge(a,b){
     const items={}, gone={};
     [a,b].forEach(s=>{
-      s.items.forEach(i=>{ if(!items[i.id]||i.t>items[i.id].t) items[i.id]={id:i.id,name:i.name,t:i.t}; });
+      s.items.forEach(i=>{ if(!items[i.id]||i.t>items[i.id].t) items[i.id]={id:i.id,name:i.name,t:i.t,q:i.q||0}; });
       Object.keys(s.gone).forEach(k=>{ const g=s.gone[k]; if(!gone[k]||g.t>gone[k].t) gone[k]={n:g.n,t:g.t}; });
     });
     const out={items:[],gone:{},history:[],rev:Math.max(a.rev,b.rev)};
@@ -248,7 +253,7 @@ body:not(.store) .storeonly{display:none}
   let noteTimer=null;
   function note(msg){
     const h=$("hint"); h.textContent=msg; h.style.color="var(--fg)";
-    clearTimeout(noteTimer); noteTimer=setTimeout(()=>{h.style.color="";h.textContent="「牛乳と卵とパン」のように続けて言えば、まとめて追加されます。間違えたら「取り消し」と言うと直前のものが消えます。"},6000);
+    clearTimeout(noteTimer); noteTimer=setTimeout(()=>{h.style.color="";h.textContent="「牛乳2個」のように言えば数量も付きます。間違えたら「取り消し」と言うと直前のものが消えます。"},6000);
   }
   function cancelLast(cur){
     // 同じ発言の中に直前の品があればその1品、なければひとつ前の入力を丸ごと消す
@@ -259,10 +264,22 @@ body:not(.store) .storeonly{display:none}
     const names=[];
     batch.forEach(b=>{
       const i=state.items.findIndex(x=>x.id===b.id);
+      if(b.qtyOnly){ if(i>=0){ state.items[i].q=b.prevQ; names.push(state.items[i].name+"の数量"); } return; }
       if(i>=0){ names.push(state.items[i].name); state.gone[b.id]={n:"",t:Date.now()}; state.items.splice(i,1); }
       if(b.newHistory) state.history=state.history.filter(h=>h!==b.name);
     });
     return names;
+  }
+  // 数量：「〇個」と言ったときだけ付ける（最大5個）。0個＝表示しない
+  const CIRC=["","①","②","③","④","⑤"];
+  const KNUM={"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10};
+  function parseQty(w){
+    const m=String(w).match(/^(.*?)[\s　]*([0-9０-９]+|[一二三四五六七八九十])[\s　]*(個|こ|コ)$/);
+    if(!m) return null;
+    let n=m[2].replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+    n=KNUM[n]||parseInt(n,10);
+    if(!n||n<1) return null;
+    return {name:m[1].replace(/[をがは]$/,"").trim(), q:n};
   }
   function addText(t){
     const words=splitWords(t); if(!words.length) return;
@@ -276,19 +293,38 @@ body:not(.store) .storeonly{display:none}
       const m=w.match(/^(.+?)(取り?消し?て?|取り?消し?です|とりけして?|トリケシ|キャンセル)$/);
       if(m&&!CANCEL.test(w)) seq.push(m[1],"取り消し"); else seq.push(w);
     });
+    const qmsgs=[]; let over=false;
+    const setQ=(it,q)=>{ if(q>5){ q=5; over=true; } cur.push({id:it.id,qtyOnly:true,prevQ:it.q||0}); it.q=q; qmsgs.push("「"+it.name+"」"+CIRC[q]); };
     seq.forEach(w=>{
       if(CANCEL.test(w)){ cancelled=cancelled.concat(cancelLast(cur)); return; }
-      if(!have.has(w)){
-        const id=uid(); state.items.push({id,name:w,t:Date.now()+cur.length}); have.add(w);   // 言った順に並ぶよう少しずらす
-        cur.push({id,name:w,newHistory:!state.history.includes(w)});
+      const pq=parseQty(w);
+      let name=pq?pq.name:w;
+      if(pq&&!name){
+        // 「2個」だけが届いた → 直前に入れた品物の数量にする
+        const lastAdd=[...cur].reverse().find(c=>!c.qtyOnly)||((addLog[addLog.length-1]||[]).filter(c=>!c.qtyOnly).slice(-1)[0]);
+        const it=lastAdd&&state.items.find(i=>i.id===lastAdd.id);
+        const sameTime=lastAdd&&cur.includes(lastAdd);   // 同じ発言の中で入れた品物なら、追加の一部として扱う
+        if(it&&sameTime){ let q=pq.q; if(q>5){q=5;over=true;} it.q=q; }
+        else if(it) setQ(it,pq.q); else note("どの品物の数量かわかりませんでした。「牛乳2個」のように続けて言ってください");
+        return;
       }
-      state.history=[w,...state.history.filter(h=>h!==w)].slice(0,24);
+      if(!have.has(name)){
+        const id=uid(); const it={id,name,t:Date.now()+cur.length,q:0};   // 言った順に並ぶよう少しずらす
+        state.items.push(it); have.add(name);
+        cur.push({id,name,newHistory:!state.history.includes(name)});
+        if(pq){ let q=pq.q; if(q>5){q=5;over=true;} it.q=q; }
+      }else if(pq){
+        setQ(state.items.find(i=>i.name===name),pq.q);   // すでにある品物は数量だけ変える
+      }
+      state.history=[name,...state.history.filter(h=>h!==name)].slice(0,24);
     });
-    if(cur.length){ addLog.push(cur); addLog=addLog.slice(-10); }
-    const addedNames=cur.map(c=>c.name);
+    if(cur.length){ addLog.push(cur.slice()); addLog=addLog.slice(-10); }
+    const addedNames=cur.filter(c=>!c.qtyOnly).map(c=>{ const it=state.items.find(i=>i.id===c.id); return c.name+(it&&it.q?CIRC[it.q]:""); });
     const msgs=[];
     if(addedNames.length) msgs.push("「"+addedNames.join("」「")+"」を追加しました");
+    if(qmsgs.length) msgs.push(qmsgs.join("")+"に数量を変えました");
     if(cancelled.length) msgs.push("「"+cancelled.join("」「")+"」を取り消しました");
+    if(over) msgs.push("数量は5個までです");
     if(!msgs.length) msgs.push("すでにリストにあります");
     note(msgs.join("。"));
     freshIds=new Set(cur.map(c=>c.id));
@@ -322,12 +358,14 @@ body:not(.store) .storeonly{display:none}
         const lab=document.createElement("label");
         const cb=document.createElement("input"); cb.type="checkbox"; cb.id="c-"+it.id;
         cb.setAttribute("aria-label",it.name+" を買った");
+        if(mode!=="store") cb.disabled=true;
         const sp=document.createElement("span"); sp.className="name"; sp.textContent=it.name;
+        if(it.q){ const qb=document.createElement("span"); qb.className="qty"; qb.textContent=CIRC[it.q]; qb.setAttribute("aria-label",it.q+"個"); sp.appendChild(qb); }
         lab.append(cb,sp);
         const del=document.createElement("button"); del.className="del"; del.type="button"; del.textContent="×";
         del.setAttribute("aria-label",it.name+" を消す");
-        del.onclick=()=>removeItem(it.id,"消しました");
-        cb.onchange=()=>{ if(cb.checked){li.classList.add("leaving");setTimeout(()=>{if(cb.checked)removeItem(it.id,"「"+it.name+"」を買いました")},1200)} };
+        del.onclick=()=>removeItem(it.id,"「"+it.name+"」を消しました");
+        cb.onchange=()=>{ if(cb.checked){li.classList.add("leaving");setTimeout(()=>{if(cb.checked)removeItem(it.id,"「"+it.name+(it.q?CIRC[it.q]:"")+"」を買いました")},1200)} };
         li.append(lab,del); ul.appendChild(li);
       });
       box.appendChild(ul);
@@ -378,10 +416,10 @@ body:not(.store) .storeonly{display:none}
     // 最後に消してから10秒たったら、まとめて片付ける
     clearTimeout(undoTimer); undoTimer=setTimeout(()=>{removed=[];renderUndos()},10000);
   }
-  function restore(id,name,idx){
+  function restore(id,name,idx,q){
     delete state.gone[id];
     if(!state.items.some(i=>i.id===id||i.name===name)){
-      const it={id,name,t:Date.now()};
+      const it={id,name,t:Date.now(),q:q||0};
       if(idx==null) state.items.push(it); else state.items.splice(Math.min(idx,state.items.length),0,it);
     }
     save(); render();
@@ -395,7 +433,7 @@ body:not(.store) .storeonly{display:none}
       const b=document.createElement("button"); b.type="button"; b.textContent="元に戻す";
       b.onclick=()=>{
         removed=removed.filter(x=>x!==r);
-        restore(r.item.id,r.item.name,r.idx);
+        restore(r.item.id,r.item.name,r.idx,r.item.q);
         renderUndos();
       };
       row.append(sp,b); box.appendChild(row);

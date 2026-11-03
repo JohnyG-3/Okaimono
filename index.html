@@ -85,7 +85,8 @@ body:not(.store) li input:checked{background:var(--home);border-color:var(--home
 li input:checked::after{content:"";width:9px;height:16px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-2px)}
 li .name{font-size:1.4rem;word-break:break-word}
 body.store li .name{font-size:1.6rem;font-weight:500}
-li.fresh{background:var(--homeSoft)}
+li.fresh{background:var(--homeSoft);animation:pop .6s ease-out}
+@keyframes pop{0%{transform:scale(.97);background:var(--home)}100%{transform:none}}
 li.leaving{opacity:.35;background:var(--storeSoft)}
 li.leaving .name{text-decoration:line-through;color:var(--done)}
 .del{border:0;background:transparent;color:var(--muted);font-size:1.4rem;width:44px;height:44px;border-radius:10px;cursor:pointer}
@@ -123,7 +124,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.5</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 1.7</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -242,7 +243,7 @@ body:not(.store) .storeonly{display:none}
     return out;
   }
   function splitWords(t){
-    const parts=String(t).replace(/[。．.]/g,"、").split(/[、,，\s　]+|それから/);
+    const parts=normNums(t).replace(/[。．.]/g,"、").split(/[、,，\s　]+|それから/);
     const out=[];
     parts.forEach(p=>{ p=p.trim(); if(p) splitTo(p).forEach(w=>{ w=w.trim(); if(w) out.push(w); }); });
     return out;
@@ -272,15 +273,26 @@ body:not(.store) .storeonly{display:none}
   }
   // 数量：「〇個」と言ったときだけ付ける（最大5個）。0個＝表示しない
   const CIRC=["","①","②","③","④","⑤"];
-  const KNUM={"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10};
+  const KNUM={"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,
+    "いっ":1,"いち":1,"ひと":1,"に":2,"ふた":2,"さん":3,"みっ":3,"よん":4,"よ":4,"よっ":4,"ご":5,"いつ":5};
+  // 数字を半角にそろえ、「2 個」のように間に空白が入っても「2個」につなげる（iPhoneの音声入力対策）
+  function normNums(t){
+    return String(t)
+      .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+      .replace(/([0-9一二三四五六七八九十])[\s　]+(個|こ|コ|つ)/g,"$1$2");
+  }
   function parseQty(w){
-    const m=String(w).match(/^(.*?)[\s　]*([0-9０-９]+|[一二三四五六七八九十])[\s　]*(個|こ|コ)$/);
+    w=normNums(w).replace(/[。、．.!！?？]+$/,"").trim();
+    let m=w.match(/^(.*?)[\s　]*([0-9]+|[一二三四五六七八九十])(個|こ|コ|つ)$/)   // 2個・二個・2こ・2つ
+       || w.match(/^(.*?)(いっ|いち|に|さん|よん|ご)(個|コ)$/)                      // にこ→「に個」などの聞き取り
+       || w.match(/^(.*?)(ひと|ふた|みっ|よっ|いつ)(つ)$/);                           // ふたつ・みっつ
     if(!m) return null;
-    let n=m[2].replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-    n=KNUM[n]||parseInt(n,10);
+    const n=KNUM[m[2]]||parseInt(m[2],10);
     if(!n||n<1) return null;
     return {name:m[1].replace(/[をがは]$/,"").trim(), q:n};
   }
+  // 名前の最後が数字（「納豆2」など）＝この後に「個」が続く途中かもしれない
+  const TRAIL_NUM=/([0-9０-９]+|[一二三四五六七八九十])$/;
   function addText(t){
     const words=splitWords(t); if(!words.length) return;
     if(!Array.isArray(state.items)) state.items=[];
@@ -293,11 +305,19 @@ body:not(.store) .storeonly{display:none}
       const m=w.match(/^(.+?)(取り?消し?て?|取り?消し?です|とりけして?|トリケシ|キャンセル)$/);
       if(m&&!CANCEL.test(w)) seq.push(m[1],"取り消し"); else seq.push(w);
     });
-    const qmsgs=[]; let over=false;
-    const setQ=(it,q)=>{ if(q>5){ q=5; over=true; } cur.push({id:it.id,qtyOnly:true,prevQ:it.q||0}); it.q=q; qmsgs.push("「"+it.name+"」"+CIRC[q]); };
+    const qmsgs=[], bumped=[]; let over=false;
+    const setQ=(it,q)=>{ if(q>5){ q=5; over=true; } cur.push({id:it.id,qtyOnly:true,prevQ:it.q||0}); it.q=q; it.t=Date.now(); bumped.push(it.id); qmsgs.push("「"+it.name+"」"+CIRC[q]); };
     seq.forEach(w=>{
       if(CANCEL.test(w)){ cancelled=cancelled.concat(cancelLast(cur)); return; }
-      const pq=parseQty(w);
+      let pq=parseQty(w);
+      if(!pq&&/^(個|コ|こ|つ)$/.test(w)){
+        // 「納豆2」のあとに「個」だけが届いた → 直前の品物の名前から数字を外して数量にする
+        const lastAdd=[...cur].reverse().find(c=>!c.qtyOnly)||((addLog[addLog.length-1]||[]).filter(c=>!c.qtyOnly).slice(-1)[0]);
+        const it=lastAdd&&state.items.find(i=>i.id===lastAdd.id);
+        const mm=it&&it.name.match(/^(.+?)[\s　]*([0-9]+|[一二三四五六七八九十])$/);
+        if(mm){ it.name=mm[1]; const q=KNUM[mm[2]]||parseInt(mm[2],10); it.q=Math.min(5,q); if(q>5) over=true; lastAdd.name=mm[1]; qmsgs.push("「"+it.name+"」"+CIRC[it.q]); }
+        return;
+      }
       let name=pq?pq.name:w;
       if(pq&&!name){
         // 「2個」だけが届いた → 直前に入れた品物の数量にする
@@ -326,17 +346,28 @@ body:not(.store) .storeonly{display:none}
     if(cancelled.length) msgs.push("「"+cancelled.join("」「")+"」を取り消しました");
     if(over) msgs.push("数量は5個までです");
     if(!msgs.length) msgs.push("すでにリストにあります");
-    note(msgs.join("。"));
-    freshIds=new Set(cur.map(c=>c.id));
+    note("聞き取り「"+String(t).trim()+"」→ "+msgs.join("。"));   // うまくいかないときに原因がわかるよう、届いた文字も出す
+    freshIds=new Set([...cur.map(c=>c.id),...bumped]);
     clearTimeout(freshTimer); freshTimer=setTimeout(()=>{freshIds=new Set();document.querySelectorAll("li.fresh").forEach(l=>l.classList.remove("fresh"))},3000);
     save(); render();
     // 追加した品物が見える位置まで動かす
-    try{
-      const fr=document.querySelectorAll("li.fresh"), last=fr[fr.length-1];
-      if(last&&last.scrollIntoView) last.scrollIntoView({block:"nearest",behavior:"smooth"});
-    }catch(e){}
+    showTop();
   }
 
+  // 追加した直後：リストの一番上が見える位置に動かし、iPhoneに画面を描き直させる
+  function showTop(){
+    try{
+      const head=document.querySelector("header").getBoundingClientRect().bottom;
+      const r=$("count").getBoundingClientRect();
+      if(r.top<head||r.top>window.innerHeight*0.55) window.scrollBy(0,r.top-head-8);
+    }catch(e){}
+    repaint();
+  }
+  function repaint(){
+    const box=$("listBox");
+    box.style.opacity="0.99";
+    requestAnimationFrame(()=>{ void box.offsetHeight; requestAnimationFrame(()=>{ box.style.opacity=""; }); });
+  }
   function render(){
     document.body.classList.toggle("store",mode==="store");
     $("mHome").setAttribute("aria-pressed",mode==="home");
@@ -352,7 +383,7 @@ body:not(.store) .storeonly{display:none}
       box.appendChild(e);
     }else{
       const ul=document.createElement("ul");
-      state.items.forEach(it=>{
+      [...state.items].sort((a,b)=>(b.t||0)-(a.t||0)).forEach(it=>{   // 新しく入れた・変えたものが一番上
         const li=document.createElement("li"); li.dataset.id=it.id;
         if(freshIds.has(it.id)) li.classList.add("fresh");
         const lab=document.createElement("label");
@@ -469,21 +500,32 @@ body:not(.store) .storeonly{display:none}
   const autoBox=$("autoAdd");
   const savedAuto=lsGet(LS+"-auto"); if(savedAuto===false) autoBox.checked=false;
   autoBox.onchange=()=>lsSet(LS+"-auto",autoBox.checked);
+  // iPhoneの音声入力は話している間「変換途中」のままなので、それを待たずに追加する。
+  // 追加済みの文字をiPhoneがもう一度入れ直してきても、二重に追加しないよう覚えておく
+  let consumed="", consumedAt=0, compEndAt=0, compSince=false;
   function addKeepFocus(){
     const inp=$("newItem"); inp.classList.remove("waiting");
-    const v=inp.value.trim(); if(!v||composingNow) return;
-    inp.value="";
+    const raw=inp.value; let v=raw.trim(); if(!v) return;
+    // 同じ音声入力の続き（変換途中のまま、または終わった直後）のときだけ、追加済みの部分を外す
+    const recent=Date.now()-consumedAt<10000;
+    const sameDictation=composingNow||compSince||Date.now()-compEndAt<3000;
+    if(recent&&sameDictation&&consumed&&v.startsWith(consumed)) v=v.slice(consumed.length).trim();
+    consumed=(composingNow||Date.now()-compEndAt<3000)?raw.trim():""; consumedAt=Date.now(); compSince=false;
+    try{ inp.value=""; }catch(e){}
+    if(!v) return;
     try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
   }
-  $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; clearTimeout(autoTimer); });
-  $("newItem").addEventListener("compositionend",()=>{ composingNow=false; schedule(); });
-  $("newItem").addEventListener("input",e=>{ if(e.isComposing) { composingNow=true; return; } schedule(); });
+  $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; compSince=true; schedule(); });
+  $("newItem").addEventListener("compositionupdate",()=>schedule());
+  $("newItem").addEventListener("compositionend",()=>{ composingNow=false; compEndAt=Date.now(); schedule(); });
+  $("newItem").addEventListener("input",()=>schedule());
   function schedule(){
     clearTimeout(autoTimer);
     const inp=$("newItem");
     if(!autoBox.checked||!inp.value.trim()){ inp.classList.remove("waiting"); return; }
     inp.classList.add("waiting");
-    autoTimer=setTimeout(addKeepFocus,AUTO_MS);
+    // 「納豆2」で止まっているときは「個」が来るかもしれないので少し長めに待つ
+    autoTimer=setTimeout(addKeepFocus,TRAIL_NUM.test(inp.value.trim())?2000:AUTO_MS);
   }
   $("newItem").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&!e.isComposing&&e.keyCode!==229){ e.preventDefault(); doAdd(); }

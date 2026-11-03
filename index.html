@@ -60,7 +60,7 @@ body.store button:focus-visible{outline-color:var(--store)}
 .hint{font-size:1rem;color:var(--muted);margin:-8px 4px 0}
 .auto{display:flex;align-items:center;gap:10px;font-size:1rem;margin:-6px 4px 0;cursor:pointer}
 .auto input{width:24px;height:24px;accent-color:var(--home);flex:none}
-.add input.waiting{border-color:var(--home);background:var(--homeSoft)}
+
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips .lbl{width:100%;font-size:.8rem;color:var(--muted);letter-spacing:.08em}
 .chip{font:inherit;font-size:1.15rem;border:1px dashed var(--home);color:var(--home);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer}
@@ -124,7 +124,7 @@ body:not(.store) .storeonly{display:none}
   <header>
     <div class="top">
       <h1>おかいものメモ</h1>
-      <span class="sync"><span id="sync">このスマホに保存</span> · 1.9</span>
+      <span class="sync"><span id="sync">このスマホに保存</span> · 2.0</span>
     </div>
     <div class="modes" role="group" aria-label="モード切り替え">
       <button class="h" id="mHome" aria-pressed="true">🏠 家で書く</button>
@@ -139,7 +139,7 @@ body:not(.store) .storeonly{display:none}
       <button class="btn" type="button" id="addBtn">追加</button>
     </form>
     <label class="auto" for="autoAdd"><input type="checkbox" id="autoAdd" checked>話し終わったら自動で追加する</label>
-    <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。数は「牛乳2個」のように言えば②と付きます（5個まで）。間違えたら「取り消し」と言うと直前のものが消えます。</p>
+    <p class="hint" id="hint">「牛乳と卵とパン」のように続けて言えば、まとめて3つ追加されます。数は「牛乳2個」のように言えば②と付きます（5個まで）。話している間、入力欄には言葉がつながって表示されますが、リストには1品ずつ入ります。間違えたら「取り消し」と言うと直前のものが消えます。</p>
   </section>
 
   <div class="banner storeonly">チェックした品物は「買った」として少しあとで消えます。押し間違えたら、残り品数のすぐ下に出る「元に戻す」で戻せます。</div>
@@ -362,7 +362,8 @@ body:not(.store) .storeonly{display:none}
     try{
       const head=document.querySelector("header").getBoundingClientRect().bottom;
       const r=$("count").getBoundingClientRect();
-      if(r.top<head||r.top>window.innerHeight*0.55) window.scrollBy(0,r.top-head-8);
+      // 音声入力中は画面を動かさない（入力の邪魔をしないため）。リストの一番上は入力欄のすぐ下にある
+      if(document.activeElement!==$("newItem")&&(r.top<head||r.top>window.innerHeight*0.55)) window.scrollBy(0,r.top-head-8);
     }catch(e){}
     repaint();
   }
@@ -516,14 +517,16 @@ body:not(.store) .storeonly{display:none}
     const n=lcp(raw,done);
     return raw.slice(n).replace(/^[、,，。．.\s　]+/,"").trim();
   }
+  // 入力欄にカーソルがある間（音声入力中）は、入力欄には一切さわらない。
+  // 空にすると、iPhoneが音声入力をやり直してしまい、次の言葉がタップするまで出なくなるため。
   function addKeepFocus(){
-    const inp=$("newItem"); inp.classList.remove("waiting");
+    const inp=$("newItem");
     const raw=inp.value;
     const v=takeNew(raw);
-    if(composingNow){
-      done=raw;                    // 変換途中：入力欄はそのまま。読んだ位置だけ進める
+    if(document.activeElement===inp){
+      done=raw;                    // 入力中：読んだ位置だけ進める（入力欄はそのまま）
     }else{
-      done=""; try{ inp.value=""; }catch(e){}   // 変換が終わっている：空にして次に備える
+      done=""; try{ inp.value=""; }catch(e){}   // 入力欄から離れている：空にしてよい
     }
     if(!v) return;
     try{ addText(v); }catch(err){ note("追加できませんでした（"+(err&&err.message||err)+"）"); }
@@ -531,12 +534,16 @@ body:not(.store) .storeonly{display:none}
   $("newItem").addEventListener("compositionstart",()=>{ composingNow=true; schedule(); });
   $("newItem").addEventListener("compositionupdate",()=>schedule());
   $("newItem").addEventListener("compositionend",()=>{ composingNow=false; schedule(); });
+  // 入力欄から離れたとき（キーボードを閉じた・ほかをタップした）：残りを追加してから空にする
+  $("newItem").addEventListener("blur",()=>{
+    if(adding) return;   // 「追加」ボタンの処理に任せる
+    setTimeout(()=>{ clearTimeout(autoTimer); addKeepFocus(); },200);
+  });
   $("newItem").addEventListener("input",()=>{ if(!$("newItem").value) done=""; schedule(); });
   function schedule(){
     clearTimeout(autoTimer);
     const inp=$("newItem");
-    if(!autoBox.checked||!inp.value.trim()){ inp.classList.remove("waiting"); return; }
-    inp.classList.add("waiting");
+    if(!autoBox.checked||!inp.value.trim()) return;
     // 「納豆2」で止まっているときは「個」が来るかもしれないので少し長めに待つ
     autoTimer=setTimeout(addKeepFocus,TRAIL_NUM.test(inp.value.trim())?2000:AUTO_MS);
   }
